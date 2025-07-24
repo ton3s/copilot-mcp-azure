@@ -18,7 +18,7 @@ variable "environment" {
 variable "location" {
   description = "Azure region for resources"
   type        = string
-  default     = "eastus"
+  default     = "westus2"  # Changed from eastus - better consumption plan availability
 }
 
 variable "azure_ad_tenant_id" {

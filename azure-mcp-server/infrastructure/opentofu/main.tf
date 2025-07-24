@@ -18,6 +18,8 @@ terraform {
 }
 
 provider "azurerm" {
+  skip_provider_registration = true
+  
   features {
     key_vault {
       purge_soft_delete_on_destroy    = false
@@ -36,6 +38,13 @@ resource "random_string" "unique" {
   length  = 8
   special = false
   upper   = false
+  numeric = true
+  
+  # This ensures a new random string on each deployment
+  keepers = {
+    # Generate a new ID each time we switch regions or resource groups
+    resource_group = azurerm_resource_group.main.name
+  }
 }
 
 # Resource Group
@@ -51,8 +60,9 @@ resource "azurerm_log_analytics_workspace" "main" {
   name                = "${var.base_name}-logs-${var.environment}-${random_string.unique.result}"
   location            = azurerm_resource_group.main.location
   resource_group_name = azurerm_resource_group.main.name
-  sku                 = "PerGB2018"
-  retention_in_days   = 30
+  sku                 = "PerGB2018"  # This is already the cheapest option
+  retention_in_days   = 30          # Minimum retention period
+  daily_quota_gb      = 0.5         # Limit daily ingestion to 0.5GB to control costs
 
   tags = var.tags
 }
@@ -64,7 +74,8 @@ resource "azurerm_application_insights" "main" {
   resource_group_name = azurerm_resource_group.main.name
   workspace_id        = azurerm_log_analytics_workspace.main.id
   application_type    = "web"
-
+  daily_data_cap_in_gb = 0.1  # Limit daily data to 100MB to control costs
+  
   tags = var.tags
 }
 
@@ -88,7 +99,8 @@ resource "azurerm_storage_account" "main" {
 
 # Key Vault
 resource "azurerm_key_vault" "main" {
-  name                        = "${var.base_name}-kv-${var.environment}-${random_string.unique.result}"
+  # Key Vault names must be 3-24 chars, alphanumeric and dashes only
+  name                        = "${substr(replace(var.base_name, "_", "-"), 0, 8)}kv${var.environment}${random_string.unique.result}"
   location                    = azurerm_resource_group.main.location
   resource_group_name         = azurerm_resource_group.main.name
   enabled_for_disk_encryption = false
@@ -166,8 +178,6 @@ resource "azurerm_linux_function_app" "main" {
   }
 
   site_config {
-    python_version = "3.11"
-    
     application_insights_key               = azurerm_application_insights.main.instrumentation_key
     application_insights_connection_string = azurerm_application_insights.main.connection_string
 
@@ -202,7 +212,7 @@ resource "azurerm_api_management" "main" {
   resource_group_name = azurerm_resource_group.main.name
   publisher_name      = var.apim_publisher_name
   publisher_email     = var.apim_publisher_email
-  sku_name            = var.environment == "prod" ? "Standard_1" : "Developer_1"
+  sku_name            = "Basic_1"  # Basic tier - more features, no policy restrictions
 
   identity {
     type = "SystemAssigned"
@@ -287,6 +297,10 @@ resource "azurerm_api_management_policy" "global" {
     tenant_id = var.azure_ad_tenant_id
     client_id = var.azure_ad_client_id
   })
+  
+  depends_on = [
+    azurerm_api_management.main
+  ]
 }
 
 # API Policy
@@ -297,6 +311,10 @@ resource "azurerm_api_management_api_policy" "mcp" {
   xml_content        = templatefile("${path.module}/policies/api-policy.xml", {
     function_app_name = azurerm_linux_function_app.main.name
   })
+  
+  depends_on = [
+    azurerm_api_management_api.mcp
+  ]
 }
 
 # API Operations
@@ -314,9 +332,10 @@ resource "azurerm_api_management_api_operation" "stream" {
     status_code = 200
     description = "SSE stream"
     header {
-      name   = "Content-Type"
-      type   = "string"
-      values = ["text/event-stream"]
+      name     = "Content-Type"
+      type     = "string"
+      values   = ["text/event-stream"]
+      required = false
     }
   }
 }
