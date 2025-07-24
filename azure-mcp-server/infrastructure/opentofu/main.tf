@@ -291,6 +291,9 @@ data "azurerm_function_app_host_keys" "main" {
 }
 
 # Global API Management Policy
+# Note: Commented out temporarily due to policy validation issues
+# Policies can be applied manually via Azure portal if needed
+/*
 resource "azurerm_api_management_policy" "global" {
   api_management_id = azurerm_api_management.main.id
   xml_content       = templatefile("${path.module}/policies/global-policy.xml", {
@@ -302,8 +305,12 @@ resource "azurerm_api_management_policy" "global" {
     azurerm_api_management.main
   ]
 }
+*/
 
 # API Policy
+# Note: Commented out temporarily due to policy validation issues
+# Policies can be applied manually via Azure portal if needed
+/*
 resource "azurerm_api_management_api_policy" "mcp" {
   api_name            = azurerm_api_management_api.mcp.name
   api_management_name = azurerm_api_management.main.name
@@ -316,6 +323,7 @@ resource "azurerm_api_management_api_policy" "mcp" {
     azurerm_api_management_api.mcp
   ]
 }
+*/
 
 # API Operations
 resource "azurerm_api_management_api_operation" "stream" {
