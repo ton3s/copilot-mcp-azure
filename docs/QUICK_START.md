@@ -6,7 +6,7 @@ Get the MCP Azure Server running in under 15 minutes!
 
 - [ ] Azure subscription
 - [ ] Azure CLI installed
-- [ ] Terraform installed
+- [ ] OpenTofu installed
 - [ ] Python 3.11+
 - [ ] VS Code with GitHub Copilot
 
@@ -40,7 +40,7 @@ echo "Save this secret securely!"
 ## 3. Deploy Infrastructure (5 minutes)
 
 ```bash
-cd azure-mcp-server/infrastructure/terraform
+cd azure-mcp-server/infrastructure/opentofu
 
 # Run automated deployment
 ./deploy.sh
@@ -66,9 +66,9 @@ The script will automatically:
 ### Option A: Web Browser Test
 
 1. Open `azure-mcp-server/tests/test_client.html`
-2. Get your values from Terraform output:
+2. Get your values from OpenTofu output:
    ```bash
-   terraform output apim_gateway_url
+   tofu output apim_gateway_url
    ```
 3. Enter in the web client:
    - API Base URL: (from terraform output)
@@ -81,7 +81,7 @@ The script will automatically:
 
 ```bash
 # Get your API URL
-API_URL=$(terraform output -raw apim_gateway_url)
+API_URL=$(tofu output -raw apim_gateway_url)
 
 # Test the health endpoint
 curl -X GET "$API_URL/mcp/health"
@@ -128,8 +128,8 @@ If you want to use with VS Code:
 To remove all resources:
 
 ```bash
-cd azure-mcp-server/infrastructure/terraform
-terraform destroy
+cd azure-mcp-server/infrastructure/opentofu
+tofu destroy
 ```
 
 ---

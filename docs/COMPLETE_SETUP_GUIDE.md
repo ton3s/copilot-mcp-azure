@@ -28,19 +28,20 @@
    curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
    ```
 
-2. **Terraform** (v1.5.0 or later)
+2. **OpenTofu** (v1.5.0 or later)
    ```bash
    # macOS
-   brew tap hashicorp/tap
-   brew install hashicorp/tap/terraform
+   brew install opentofu
    
    # Windows
-   choco install terraform
+   choco install opentofu
    
    # Linux
-   wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-   echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-   sudo apt update && sudo apt install terraform
+   # Install via snap
+   snap install --classic opentofu
+   
+   # Or via installer script
+   curl --proto '=https' --tlsv1.2 -fsSL https://get.opentofu.org/install-opentofu.sh | sh
    ```
 
 3. **Python** (3.11 or later)
@@ -162,10 +163,10 @@ git clone https://github.com/your-org/copilot-mcp-azure.git
 cd copilot-mcp-azure/azure-mcp-server
 ```
 
-### 2. Deploy with Terraform
+### 2. Deploy with OpenTofu
 
 ```bash
-cd infrastructure/terraform
+cd infrastructure/opentofu
 
 # Run the automated deployment script
 ./deploy.sh
@@ -177,7 +178,7 @@ The script will prompt for:
 - APIM publisher email
 - Organization name
 
-#### Manual Terraform Deployment (Alternative)
+#### Manual OpenTofu Deployment (Alternative)
 
 ```bash
 # Copy and configure variables
@@ -210,25 +211,25 @@ tags = {
 
 Deploy:
 ```bash
-# Initialize Terraform
-terraform init
+# Initialize OpenTofu
+tofu init
 
 # Review plan
-terraform plan
+tofu plan
 
 # Apply configuration
-terraform apply
+tofu apply
 ```
 
 ### 3. Save Deployment Outputs
 
 ```bash
 # Save outputs to file
-terraform output -json > deployment-outputs.json
+tofu output -json > deployment-outputs.json
 
 # View key outputs
-terraform output -raw apim_gateway_url
-terraform output -raw function_app_name
+tofu output -raw apim_gateway_url
+tofu output -raw function_app_name
 ```
 
 ## Function App Deployment
@@ -267,8 +268,8 @@ Create `local.settings.json`:
 
 ```bash
 # Get deployment parameters
-FUNCTION_APP_NAME=$(cd ../infrastructure/terraform && terraform output -raw function_app_name)
-RESOURCE_GROUP=$(cd ../infrastructure/terraform && terraform output -raw resource_group_name)
+FUNCTION_APP_NAME=$(cd ../infrastructure/opentofu && tofu output -raw function_app_name)
+RESOURCE_GROUP=$(cd ../infrastructure/opentofu && tofu output -raw resource_group_name)
 
 # Create deployment package
 zip -r ../function-app.zip . -x "venv/*" "__pycache__/*" "*.pyc" "local.settings.json" ".env"

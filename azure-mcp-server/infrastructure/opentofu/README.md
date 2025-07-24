@@ -1,11 +1,11 @@
-# Terraform Deployment for MCP Azure Server
+# OpenTofu Deployment for MCP Azure Server
 
-This directory contains Terraform configuration for deploying the MCP Azure Server infrastructure.
+This directory contains OpenTofu configuration for deploying the MCP Azure Server infrastructure. [OpenTofu](https://opentofu.org) is the open-source fork of Terraform, providing the same functionality with an open-source license.
 
 ## Prerequisites
 
 1. **Install required tools:**
-   - [Terraform](https://www.terraform.io/downloads) (>= 1.5.0)
+   - [OpenTofu](https://opentofu.org/docs/intro/install/) (>= 1.5.0)
    - [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli)
    - [jq](https://stedolan.github.io/jq/download/) (for JSON parsing)
 
@@ -31,7 +31,7 @@ Use the provided deployment script for an interactive setup:
 
 This script will:
 - Check prerequisites
-- Initialize Terraform
+- Initialize OpenTofu
 - Create terraform.tfvars from your inputs
 - Plan and apply the deployment
 - Optionally deploy the Function App code
@@ -46,17 +46,17 @@ If you prefer manual control:
 cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your values
 
-# 2. Initialize Terraform
-terraform init
+# 2. Initialize OpenTofu
+tofu init
 
 # 3. Plan deployment
-terraform plan
+tofu plan
 
 # 4. Apply deployment
-terraform apply
+tofu apply
 
 # 5. View outputs
-terraform output
+tofu output
 ```
 
 ## Configuration
@@ -80,7 +80,7 @@ terraform output
 
 ## Resources Created
 
-The Terraform configuration creates:
+The OpenTofu configuration creates:
 
 1. **Core Infrastructure:**
    - Resource Group
@@ -107,13 +107,33 @@ The Terraform configuration creates:
 
 ## Outputs
 
-After deployment, Terraform provides:
+After deployment, OpenTofu provides:
 
 - Function App name and URL
 - API Management gateway URL
 - Key Vault name and URI
 - Application Insights connection string
 - MCP endpoint URLs
+
+## OpenTofu vs Terraform
+
+This configuration uses OpenTofu, which is:
+- 100% compatible with Terraform configurations
+- Open-source and community-driven
+- Free from licensing restrictions
+- Actively maintained by the Linux Foundation
+
+### Migration from Terraform
+
+If you have existing Terraform state:
+
+```bash
+# The state format is compatible
+# Simply use tofu commands instead of terraform
+tofu init
+tofu plan
+tofu apply
+```
 
 ## Testing
 
@@ -128,9 +148,9 @@ After deployment:
 2. **Python Integration Tests:**
    ```bash
    cd ../..
-   export API_BASE_URL=$(terraform -chdir=infrastructure/terraform output -raw apim_gateway_url)
-   export CLIENT_ID=$(grep azure_ad_client_id infrastructure/terraform/terraform.tfvars | cut -d'"' -f2)
-   export TENANT_ID=$(grep azure_ad_tenant_id infrastructure/terraform/terraform.tfvars | cut -d'"' -f2)
+   export API_BASE_URL=$(tofu output -raw apim_gateway_url)
+   export CLIENT_ID=$(grep azure_ad_client_id terraform.tfvars | cut -d'"' -f2)
+   export TENANT_ID=$(grep azure_ad_tenant_id terraform.tfvars | cut -d'"' -f2)
    
    pytest tests/
    ```
@@ -157,7 +177,7 @@ After deployment:
 
 ### State Management
 
-Terraform state is stored locally by default. For team deployments:
+OpenTofu state is stored locally by default. For team deployments:
 
 1. Configure remote state backend:
    ```hcl
@@ -173,7 +193,7 @@ Terraform state is stored locally by default. For team deployments:
 
 2. Initialize with backend:
    ```bash
-   terraform init -backend-config="storage_account_name=tfstateXXXXX"
+   tofu init -backend-config="storage_account_name=tfstateXXXXX"
    ```
 
 ## Cleanup
@@ -181,7 +201,7 @@ Terraform state is stored locally by default. For team deployments:
 To remove all resources:
 
 ```bash
-terraform destroy
+tofu destroy
 ```
 
 **Warning:** This will delete all resources including data. Ensure you have backups if needed.
@@ -198,7 +218,7 @@ For production deployments, consider:
    ```
 
 2. **Multi-region deployment:**
-   - Use Terraform workspaces for multiple regions
+   - Use OpenTofu workspaces for multiple regions
    - Configure Traffic Manager for global routing
 
 3. **Enhanced security:**
@@ -215,9 +235,15 @@ Add custom APIM policies by modifying:
 ## Support
 
 For issues or questions:
-1. Check Terraform logs: `terraform show`
+1. Check OpenTofu logs: `tofu show`
 2. Review Azure Activity Log in portal
 3. Enable debug logging: `export TF_LOG=DEBUG`
+
+## Resources
+
+- [OpenTofu Documentation](https://opentofu.org/docs/)
+- [OpenTofu Registry](https://registry.opentofu.org/)
+- [Azure Provider Documentation](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
 
 ## Next Steps
 

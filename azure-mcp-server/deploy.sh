@@ -48,7 +48,10 @@ echo -e "\n${YELLOW}Creating resource group...${NC}"
 az group create --name $RESOURCE_GROUP --location $LOCATION
 
 # Deploy infrastructure
-echo -e "\n${YELLOW}Deploying infrastructure...${NC}"
+echo -e "\n${YELLOW}Note: This script uses Bicep. For OpenTofu deployment, use:${NC}"
+echo -e "${GREEN}cd infrastructure/opentofu && ./deploy.sh${NC}"
+echo -e "\n${YELLOW}Continuing with Bicep deployment...${NC}"
+
 DEPLOYMENT_OUTPUT=$(az deployment group create \
     --resource-group $RESOURCE_GROUP \
     --template-file infrastructure/bicep/main.bicep \

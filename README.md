@@ -33,7 +33,7 @@ GitHub Copilot ←→ Azure API Management ←→ Azure Functions ←→ Azure S
 
 - Azure subscription
 - Azure CLI
-- Terraform
+- OpenTofu
 - Python 3.11+
 - VS Code with GitHub Copilot
 
@@ -48,7 +48,7 @@ cd copilot-mcp-azure
 az login
 
 # Deploy infrastructure
-cd azure-mcp-server/infrastructure/terraform
+cd azure-mcp-server/infrastructure/opentofu
 ./deploy.sh
 ```
 
@@ -75,7 +75,7 @@ copilot-mcp-azure/
 ├── docs/                          # Comprehensive documentation
 ├── azure-mcp-server/              # Server implementation
 │   ├── src/                       # Python source code
-│   ├── infrastructure/            # Terraform/Bicep IaC
+│   ├── infrastructure/            # OpenTofu/Bicep IaC
 │   └── tests/                     # Test suites
 └── github-copilot-extension/      # VS Code extension
 ```

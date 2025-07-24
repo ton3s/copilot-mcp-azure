@@ -114,7 +114,7 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 
-# Terraform
+# OpenTofu / Terraform
 *.tfstate
 *.tfstate.*
 .terraform/
@@ -131,6 +131,8 @@ crash.log
 crash.*.log
 .terraformrc
 terraform.rc
+.opentofu/
+.tofu
 
 # Azure Functions
 local.settings.json
