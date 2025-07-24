@@ -1,0 +1,28 @@
+# Rename this file to terraform.tfvars and fill in your values
+
+# Base configuration
+base_name   = "mcp-server"
+environment = "dev"
+location    = "eastus"
+
+# Azure AD configuration
+azure_ad_tenant_id = "YOUR_TENANT_ID"
+azure_ad_client_id = "YOUR_CLIENT_ID"
+
+# Optional: GitHub organization restriction
+github_organization = ""
+
+# API Management configuration
+apim_publisher_name  = "Your Organization"
+apim_publisher_email = "admin@yourorg.com"
+
+# Function App SKU (Y1 = Consumption, EP1-EP3 = Premium)
+function_app_sku = "Y1"
+
+# Resource tags
+tags = {
+  Project     = "MCP-Server"
+  Environment = "dev"
+  ManagedBy   = "Terraform"
+  Owner       = "Your Team"
+}

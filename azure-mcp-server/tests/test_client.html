@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MCP Azure Test Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .config-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .config-section input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .button-group {
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            margin-right: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #0066cc;
+            color: white;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .output-section {
+            margin-top: 20px;
+        }
+        .output-box {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .sse-event {
+            padding: 5px;
+            margin: 2px 0;
+            background: #e9ecef;
+            border-radius: 2px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .json-output {
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .tool-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f0f0f0;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .tool-item:hover {
+            background: #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MCP Azure Test Client</h1>
+        
+        <div class="config-section">
+            <h3>Configuration</h3>
+            <input type="text" id="apiUrl" placeholder="API Base URL (e.g., https://your-apim.azure-api.net)" />
+            <input type="text" id="tenantId" placeholder="Azure AD Tenant ID" />
+            <input type="text" id="clientId" placeholder="Azure AD Client ID" />
+            <input type="password" id="clientSecret" placeholder="Client Secret (for testing only)" />
+        </div>
+
+        <div class="status disconnected" id="connectionStatus">
+            Status: Disconnected
+        </div>
+
+        <div class="button-group">
+            <button onclick="connect()">Connect</button>
+            <button onclick="disconnect()" disabled id="disconnectBtn">Disconnect</button>
+            <button onclick="listTools()" disabled id="listToolsBtn">List Tools</button>
+            <button onclick="listResources()" disabled id="listResourcesBtn">List Resources</button>
+            <button onclick="testAnalyzeCode()" disabled id="analyzeBtn">Test Analyze Code</button>
+            <button onclick="testGenerateCode()" disabled id="generateBtn">Test Generate Code</button>
+        </div>
+
+        <div class="output-section">
+            <h3>SSE Events</h3>
+            <div class="output-box" id="sseOutput"></div>
+
+            <h3>Command Responses</h3>
+            <div class="output-box json-output" id="commandOutput"></div>
+
+            <h3>Available Tools</h3>
+            <div class="output-box" id="toolsOutput"></div>
+        </div>
+    </div>
+
+    <script>
+        let accessToken = null;
+        let sessionId = null;
+        let eventSource = null;
+
+        async function getAccessToken() {
+            const tenantId = document.getElementById('tenantId').value;
+            const clientId = document.getElementById('clientId').value;
+            const clientSecret = document.getElementById('clientSecret').value;
+
+            const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+            
+            const params = new URLSearchParams({
+                client_id: clientId,
+                client_secret: clientSecret,
+                scope: `api://${clientId}/.default`,
+                grant_type: 'client_credentials'
+            });
+
+            const response = await fetch(tokenUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: params
+            });
+
+            const data = await response.json();
+            return data.access_token;
+        }
+
+        async function connect() {
+            try {
+                updateStatus('Authenticating...', false);
+                
+                // Get access token
+                accessToken = await getAccessToken();
+                
+                // Initialize MCP session
+                const initResponse = await sendCommand('initialize', {
+                    clientInfo: {
+                        name: 'Web Test Client',
+                        version: '1.0.0'
+                    },
+                    capabilities: {
+                        tools: true,
+                        resources: true,
+                        prompts: true,
+                        sampling: true
+                    }
+                });
+
+                logCommand('initialize', initResponse);
+
+                // Connect to SSE stream
+                connectSSE();
+
+                // Enable buttons
+                document.getElementById('disconnectBtn').disabled = false;
+                document.getElementById('listToolsBtn').disabled = false;
+                document.getElementById('listResourcesBtn').disabled = false;
+                document.getElementById('analyzeBtn').disabled = false;
+                document.getElementById('generateBtn').disabled = false;
+
+                updateStatus('Connected', true);
+            } catch (error) {
+                console.error('Connection error:', error);
+                updateStatus(`Error: ${error.message}`, false);
+            }
+        }
+
+        function connectSSE() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const url = `${apiUrl}/mcp/stream`;
+
+            eventSource = new EventSource(url, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'X-Session-Id': sessionId || ''
+                }
+            });
+
+            eventSource.addEventListener('connected', (event) => {
+                const data = JSON.parse(event.data);
+                sessionId = data.session_id;
+                logSSE('connected', data);
+            });
+
+            eventSource.addEventListener('message', (event) => {
+                const data = JSON.parse(event.data);
+                logSSE('message', data);
+            });
+
+            eventSource.addEventListener('heartbeat', (event) => {
+                const data = JSON.parse(event.data);
+                logSSE('heartbeat', data);
+            });
+
+            eventSource.onerror = (error) => {
+                console.error('SSE error:', error);
+                logSSE('error', { error: 'Connection error' });
+            };
+        }
+
+        async function sendCommand(method, params = {}) {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const url = `${apiUrl}/mcp/command`;
+
+            const headers = {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            };
+
+            if (sessionId) {
+                headers['X-Session-Id'] = sessionId;
+            }
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: Date.now().toString(),
+                    method: method,
+                    params: params
+                })
+            });
+
+            return await response.json();
+        }
+
+        async function listTools() {
+            try {
+                const response = await sendCommand('tools/list');
+                logCommand('tools/list', response);
+                
+                if (response.result && response.result.tools) {
+                    displayTools(response.result.tools);
+                }
+            } catch (error) {
+                console.error('Error listing tools:', error);
+            }
+        }
+
+        async function listResources() {
+            try {
+                const response = await sendCommand('resources/list');
+                logCommand('resources/list', response);
+            } catch (error) {
+                console.error('Error listing resources:', error);
+            }
+        }
+
+        async function testAnalyzeCode() {
+            const testCode = `def fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n-1) + fibonacci(n-2)
+    
+result = fibonacci(10)
+print(f"Fibonacci(10) = {result}")`;
+
+            try {
+                const response = await sendCommand('tools/call', {
+                    name: 'analyze_code',
+                    arguments: {
+                        code: testCode,
+                        language: 'python',
+                        analysis_type: 'all'
+                    }
+                });
+                logCommand('analyze_code', response);
+            } catch (error) {
+                console.error('Error analyzing code:', error);
+            }
+        }
+
+        async function testGenerateCode() {
+            try {
+                const response = await sendCommand('tools/call', {
+                    name: 'generate_code',
+                    arguments: {
+                        description: 'Function to validate credit card numbers using Luhn algorithm',
+                        language: 'javascript'
+                    }
+                });
+                logCommand('generate_code', response);
+            } catch (error) {
+                console.error('Error generating code:', error);
+            }
+        }
+
+        function disconnect() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+
+            sessionId = null;
+            accessToken = null;
+
+            // Disable buttons
+            document.getElementById('disconnectBtn').disabled = true;
+            document.getElementById('listToolsBtn').disabled = true;
+            document.getElementById('listResourcesBtn').disabled = true;
+            document.getElementById('analyzeBtn').disabled = true;
+            document.getElementById('generateBtn').disabled = true;
+
+            updateStatus('Disconnected', false);
+        }
+
+        function updateStatus(message, connected) {
+            const statusEl = document.getElementById('connectionStatus');
+            statusEl.textContent = `Status: ${message}`;
+            statusEl.className = `status ${connected ? 'connected' : 'disconnected'}`;
+        }
+
+        function logSSE(eventType, data) {
+            const output = document.getElementById('sseOutput');
+            const event = document.createElement('div');
+            event.className = 'sse-event';
+            event.textContent = `[${new Date().toLocaleTimeString()}] ${eventType}: ${JSON.stringify(data)}`;
+            output.appendChild(event);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function logCommand(command, response) {
+            const output = document.getElementById('commandOutput');
+            output.textContent = `Command: ${command}\n\nResponse:\n${JSON.stringify(response, null, 2)}`;
+        }
+
+        function displayTools(tools) {
+            const output = document.getElementById('toolsOutput');
+            output.innerHTML = '';
+            
+            tools.forEach(tool => {
+                const toolEl = document.createElement('div');
+                toolEl.className = 'tool-item';
+                toolEl.innerHTML = `
+                    <strong>${tool.name}</strong><br>
+                    ${tool.description}<br>
+                    <small>Schema: ${JSON.stringify(tool.inputSchema, null, 2)}</small>
+                `;
+                output.appendChild(toolEl);
+            });
+        }
+
+        // Load saved configuration
+        window.onload = function() {
+            document.getElementById('apiUrl').value = localStorage.getItem('apiUrl') || '';
+            document.getElementById('tenantId').value = localStorage.getItem('tenantId') || '';
+            document.getElementById('clientId').value = localStorage.getItem('clientId') || '';
+        };
+
+        // Save configuration
+        document.getElementById('apiUrl').addEventListener('change', (e) => {
+            localStorage.setItem('apiUrl', e.target.value);
+        });
+        document.getElementById('tenantId').addEventListener('change', (e) => {
+            localStorage.setItem('tenantId', e.target.value);
+        });
+        document.getElementById('clientId').addEventListener('change', (e) => {
+            localStorage.setItem('clientId', e.target.value);
+        });
+    </script>
+</body>
+</html>

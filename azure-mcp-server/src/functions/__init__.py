@@ -1,0 +1,1 @@
+# Azure Functions MCP Server

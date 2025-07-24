@@ -1,0 +1,117 @@
+{
+  "name": "mcp-azure-copilot",
+  "displayName": "MCP Azure for GitHub Copilot",
+  "description": "Connect GitHub Copilot to Azure MCP Server for enhanced code analysis and generation",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["AI", "Programming Languages", "Other"],
+  "keywords": ["copilot", "mcp", "azure", "ai", "code-analysis"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "chatParticipants": [
+      {
+        "id": "mcp-azure",
+        "fullName": "MCP Azure Assistant",
+        "name": "mcp",
+        "description": "AI-powered code analysis and generation via Azure MCP Server",
+        "isSticky": true
+      }
+    ],
+    "commands": [
+      {
+        "command": "mcp-azure.connect",
+        "title": "Connect to MCP Server",
+        "category": "MCP Azure"
+      },
+      {
+        "command": "mcp-azure.disconnect",
+        "title": "Disconnect from MCP Server",
+        "category": "MCP Azure"
+      },
+      {
+        "command": "mcp-azure.analyzeCode",
+        "title": "Analyze Current Code",
+        "category": "MCP Azure"
+      },
+      {
+        "command": "mcp-azure.generateCode",
+        "title": "Generate Code",
+        "category": "MCP Azure"
+      },
+      {
+        "command": "mcp-azure.listTools",
+        "title": "List Available Tools",
+        "category": "MCP Azure"
+      }
+    ],
+    "configuration": {
+      "title": "MCP Azure",
+      "properties": {
+        "mcp-azure.apiBaseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Base URL for the MCP API (e.g., https://your-apim.azure-api.net)"
+        },
+        "mcp-azure.clientId": {
+          "type": "string",
+          "default": "",
+          "description": "Azure AD Application (client) ID"
+        },
+        "mcp-azure.tenantId": {
+          "type": "string",
+          "default": "",
+          "description": "Azure AD Tenant ID"
+        },
+        "mcp-azure.scope": {
+          "type": "string",
+          "default": "",
+          "description": "OAuth2 scope (leave empty to use default)"
+        },
+        "mcp-azure.autoConnect": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically connect to MCP server on startup"
+        }
+      }
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "mcp-azure.analyzeCode",
+          "group": "mcp-azure@1"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "20.x",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "axios": "^1.6.5",
+    "eventsource": "^2.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/mcp-azure-copilot"
+  },
+  "publisher": "your-publisher-id",
+  "license": "MIT"
+}

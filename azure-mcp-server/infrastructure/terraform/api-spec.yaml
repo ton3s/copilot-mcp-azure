@@ -1,0 +1,206 @@
+openapi: 3.0.1
+info:
+  title: MCP Server API
+  description: Model Context Protocol server for GitHub Copilot integration
+  version: 1.0.0
+servers:
+  - url: https://{apim-instance}.azure-api.net/mcp
+    variables:
+      apim-instance:
+        default: your-apim
+paths:
+  /stream:
+    get:
+      summary: SSE Stream
+      description: Server-Sent Events stream for MCP communication
+      operationId: stream
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: ^Bearer .+$
+        - name: X-Session-Id
+          in: header
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: SSE stream established
+          headers:
+            Content-Type:
+              schema:
+                type: string
+                enum: ['text/event-stream']
+            Cache-Control:
+              schema:
+                type: string
+                enum: ['no-cache']
+            Connection:
+              schema:
+                type: string
+                enum: ['keep-alive']
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /command:
+    post:
+      summary: Execute MCP Command
+      description: Execute MCP protocol commands
+      operationId: command
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: ^Bearer .+$
+        - name: X-Session-Id
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MCPRequest'
+      responses:
+        '200':
+          description: Command executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MCPResponse'
+        '202':
+          description: Command accepted for async processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MCPAsyncResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    options:
+      summary: CORS preflight
+      description: Handle CORS preflight requests
+      operationId: commandOptions
+      responses:
+        '204':
+          description: No content
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+            Access-Control-Allow-Methods:
+              schema:
+                type: string
+            Access-Control-Allow-Headers:
+              schema:
+                type: string
+components:
+  schemas:
+    MCPRequest:
+      type: object
+      required:
+        - jsonrpc
+        - method
+      properties:
+        jsonrpc:
+          type: string
+          enum: ['2.0']
+        id:
+          oneOf:
+            - type: string
+            - type: number
+            - type: 'null'
+        method:
+          type: string
+        params:
+          type: object
+    MCPResponse:
+      type: object
+      required:
+        - jsonrpc
+      properties:
+        jsonrpc:
+          type: string
+          enum: ['2.0']
+        id:
+          oneOf:
+            - type: string
+            - type: number
+            - type: 'null'
+        result:
+          type: object
+        error:
+          $ref: '#/components/schemas/MCPError'
+    MCPAsyncResponse:
+      type: object
+      required:
+        - jsonrpc
+        - id
+        - result
+      properties:
+        jsonrpc:
+          type: string
+          enum: ['2.0']
+        id:
+          oneOf:
+            - type: string
+            - type: number
+        result:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: ['accepted']
+    MCPError:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          type: object
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        correlationId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security:
+  - bearerAuth: []

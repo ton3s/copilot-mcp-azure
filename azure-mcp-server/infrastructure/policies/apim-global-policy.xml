@@ -1,0 +1,157 @@
+<policies>
+    <inbound>
+        <!-- Extract OAuth2 token from Authorization header -->
+        <set-variable name="bearer-token" value="@{
+            string authHeader = context.Request.Headers.GetValueOrDefault("Authorization", "");
+            if (authHeader?.StartsWith("Bearer ") == true)
+            {
+                return authHeader.Substring(7);
+            }
+            return null;
+        }" />
+        
+        <!-- Validate JWT token -->
+        <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized">
+            <openid-config url="https://login.microsoftonline.com/{tenant-id}/v2.0/.well-known/openid-configuration" />
+            <audiences>
+                <audience>api://{client-id}</audience>
+                <audience>{client-id}</audience>
+            </audiences>
+            <issuers>
+                <issuer>https://sts.windows.net/{tenant-id}/</issuer>
+                <issuer>https://login.microsoftonline.com/{tenant-id}/v2.0</issuer>
+            </issuers>
+            <required-claims>
+                <claim name="aud" match="any">
+                    <value>api://{client-id}</value>
+                    <value>{client-id}</value>
+                </claim>
+            </required-claims>
+        </validate-jwt>
+        
+        <!-- Rate limiting per user -->
+        <rate-limit-by-key calls="100" renewal-period="60" counter-key="@(context.Request.Headers.GetValueOrDefault("Authorization","").GetHashCode())" />
+        
+        <!-- Throttling -->
+        <quota-by-key calls="10000" renewal-period="3600" counter-key="@(context.Request.Headers.GetValueOrDefault("Authorization","").GetHashCode())" />
+        
+        <!-- Set correlation ID for tracking -->
+        <set-header name="X-Correlation-Id" exists-action="skip">
+            <value>@(Guid.NewGuid().ToString())</value>
+        </set-header>
+        
+        <!-- Log request to Application Insights -->
+        <log-to-eventhub logger-id="applicationinsights">@{
+            return new JObject(
+                new JProperty("EventTime", DateTime.UtcNow.ToString()),
+                new JProperty("ServiceName", context.Deployment.ServiceName),
+                new JProperty("RequestId", context.RequestId),
+                new JProperty("CorrelationId", context.Request.Headers.GetValueOrDefault("X-Correlation-Id", "")),
+                new JProperty("IPAddress", context.Request.IpAddress),
+                new JProperty("Operation", context.Operation.Name),
+                new JProperty("Method", context.Request.Method),
+                new JProperty("URL", context.Request.Url.ToString()),
+                new JProperty("UserId", context.User?.Id ?? "anonymous")
+            ).ToString();
+        }</log-to-eventhub>
+    </inbound>
+    
+    <backend>
+        <forward-request timeout="300" />
+    </backend>
+    
+    <outbound>
+        <!-- Add security headers -->
+        <set-header name="X-Content-Type-Options" exists-action="override">
+            <value>nosniff</value>
+        </set-header>
+        <set-header name="X-Frame-Options" exists-action="override">
+            <value>DENY</value>
+        </set-header>
+        <set-header name="X-XSS-Protection" exists-action="override">
+            <value>1; mode=block</value>
+        </set-header>
+        <set-header name="Strict-Transport-Security" exists-action="override">
+            <value>max-age=31536000; includeSubDomains</value>
+        </set-header>
+        
+        <!-- Remove sensitive headers -->
+        <set-header name="X-Powered-By" exists-action="delete" />
+        <set-header name="X-AspNet-Version" exists-action="delete" />
+        
+        <!-- Add CORS headers for GitHub Copilot -->
+        <cors allow-credentials="true">
+            <allowed-origins>
+                <origin>vscode://</origin>
+                <origin>vscode-insiders://</origin>
+                <origin>https://github.com</origin>
+                <origin>https://copilot.github.com</origin>
+            </allowed-origins>
+            <allowed-methods>
+                <method>GET</method>
+                <method>POST</method>
+                <method>OPTIONS</method>
+            </allowed-methods>
+            <allowed-headers>
+                <header>Authorization</header>
+                <header>Content-Type</header>
+                <header>X-Session-Id</header>
+                <header>X-Correlation-Id</header>
+            </allowed-headers>
+            <expose-headers>
+                <header>X-Session-Id</header>
+                <header>X-Correlation-Id</header>
+            </expose-headers>
+        </cors>
+    </outbound>
+    
+    <on-error>
+        <!-- Log errors to Application Insights -->
+        <log-to-eventhub logger-id="applicationinsights">@{
+            return new JObject(
+                new JProperty("EventTime", DateTime.UtcNow.ToString()),
+                new JProperty("ServiceName", context.Deployment.ServiceName),
+                new JProperty("RequestId", context.RequestId),
+                new JProperty("CorrelationId", context.Request.Headers.GetValueOrDefault("X-Correlation-Id", "")),
+                new JProperty("IPAddress", context.Request.IpAddress),
+                new JProperty("Operation", context.Operation.Name),
+                new JProperty("Method", context.Request.Method),
+                new JProperty("URL", context.Request.Url.ToString()),
+                new JProperty("Error", context.LastError.Message),
+                new JProperty("ErrorSource", context.LastError.Source),
+                new JProperty("ErrorReason", context.LastError.Reason)
+            ).ToString();
+        }</log-to-eventhub>
+        
+        <!-- Return standardized error response -->
+        <return-response>
+            <set-status code="@(context.Response?.StatusCode ?? 500)" reason="@(context.Response?.StatusReason ?? "Internal Server Error")" />
+            <set-header name="Content-Type" exists-action="override">
+                <value>application/json</value>
+            </set-header>
+            <set-body>@{
+                var statusCode = context.Response?.StatusCode ?? 500;
+                var error = "Internal Server Error";
+                var message = "An error occurred processing your request";
+                
+                if (statusCode == 401) {
+                    error = "Unauthorized";
+                    message = "Invalid or missing authentication token";
+                } else if (statusCode == 403) {
+                    error = "Forbidden";
+                    message = "You don't have permission to access this resource";
+                } else if (statusCode == 429) {
+                    error = "Too Many Requests";
+                    message = "Rate limit exceeded. Please try again later";
+                }
+                
+                return new JObject(
+                    new JProperty("error", error),
+                    new JProperty("message", message),
+                    new JProperty("correlationId", context.Request.Headers.GetValueOrDefault("X-Correlation-Id", "")),
+                    new JProperty("timestamp", DateTime.UtcNow.ToString("o"))
+                ).ToString();
+            }</set-body>
+        </return-response>
+    </on-error>
+</policies>

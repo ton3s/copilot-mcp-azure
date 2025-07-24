@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "value": "dev"
+    },
+    "baseName": {
+      "value": "mcp-server"
+    },
+    "azureAdTenantId": {
+      "value": "YOUR_TENANT_ID"
+    },
+    "azureAdClientId": {
+      "value": "YOUR_CLIENT_ID"
+    },
+    "githubOrganization": {
+      "value": "YOUR_GITHUB_ORG"
+    }
+  }
+}

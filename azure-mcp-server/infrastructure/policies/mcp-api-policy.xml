@@ -1,0 +1,87 @@
+<policies>
+    <inbound>
+        <base />
+        
+        <!-- Specific policies for MCP API -->
+        <!-- Check for required MCP headers -->
+        <check-header name="Content-Type" failed-check-httpcode="400" failed-check-error-message="Content-Type header is required">
+            <value>application/json</value>
+            <value>text/event-stream</value>
+        </check-header>
+        
+        <!-- Route based on operation -->
+        <choose>
+            <when condition="@(context.Request.Url.Path.EndsWith("/stream"))">
+                <!-- SSE specific settings -->
+                <set-backend-service base-url="https://{function-app-name}.azurewebsites.net/api" />
+                <set-header name="X-SSE-Connection" exists-action="override">
+                    <value>true</value>
+                </set-header>
+            </when>
+            <when condition="@(context.Request.Url.Path.EndsWith("/command"))">
+                <!-- Command endpoint specific settings -->
+                <set-backend-service base-url="https://{function-app-name}.azurewebsites.net/api" />
+                
+                <!-- Validate JSON-RPC structure -->
+                <validate-content unspecified-content-type-action="prevent" max-size="102400" size-exceeded-action="prevent">
+                    <content type="application/json">
+                        <validate-json>
+                            <schema><![CDATA[
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "jsonrpc": {
+            "type": "string",
+            "enum": ["2.0"]
+        },
+        "method": {
+            "type": "string"
+        },
+        "params": {
+            "type": ["object", "null"]
+        },
+        "id": {
+            "type": ["string", "number", "null"]
+        }
+    },
+    "required": ["jsonrpc", "method"],
+    "additionalProperties": false
+}
+                            ]]></schema>
+                        </validate-json>
+                    </content>
+                </validate-content>
+            </when>
+        </choose>
+        
+        <!-- Add Azure Function key if needed -->
+        <set-header name="x-functions-key" exists-action="override">
+            <value>{{AzureFunctionKey}}</value>
+        </set-header>
+    </inbound>
+    
+    <backend>
+        <base />
+    </backend>
+    
+    <outbound>
+        <base />
+        
+        <!-- Handle SSE responses -->
+        <choose>
+            <when condition="@(context.Request.Headers.GetValueOrDefault("X-SSE-Connection", "") == "true")">
+                <set-header name="Cache-Control" exists-action="override">
+                    <value>no-cache</value>
+                </set-header>
+                <set-header name="Connection" exists-action="override">
+                    <value>keep-alive</value>
+                </set-header>
+            </when>
+        </choose>
+    </outbound>
+    
+    <on-error>
+        <base />
+    </on-error>
+</policies>
