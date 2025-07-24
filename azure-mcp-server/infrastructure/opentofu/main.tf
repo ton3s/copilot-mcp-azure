@@ -14,6 +14,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6.0"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.2.0"
+    }
   }
 }
 
@@ -290,40 +294,23 @@ data "azurerm_function_app_host_keys" "main" {
   ]
 }
 
-# Global API Management Policy
-# Note: Commented out temporarily due to policy validation issues
-# Policies can be applied manually via Azure portal if needed
-/*
-resource "azurerm_api_management_policy" "global" {
-  api_management_id = azurerm_api_management.main.id
-  xml_content       = templatefile("${path.module}/policies/global-policy.xml", {
+# API Policy - Simplified JWT validation
+# This policy validates JWT tokens and adds necessary headers
+resource "azurerm_api_management_api_policy" "mcp" {
+  api_name            = azurerm_api_management_api.mcp.name
+  api_management_name = azurerm_api_management.main.name
+  resource_group_name = azurerm_resource_group.main.name
+  
+  xml_content = templatefile("${path.module}/policies/simple-jwt-policy.xml", {
     tenant_id = var.azure_ad_tenant_id
     client_id = var.azure_ad_client_id
   })
   
   depends_on = [
-    azurerm_api_management.main
+    azurerm_api_management_api.mcp,
+    azurerm_api_management_named_value.function_key
   ]
 }
-*/
-
-# API Policy
-# Note: Commented out temporarily due to policy validation issues
-# Policies can be applied manually via Azure portal if needed
-/*
-resource "azurerm_api_management_api_policy" "mcp" {
-  api_name            = azurerm_api_management_api.mcp.name
-  api_management_name = azurerm_api_management.main.name
-  resource_group_name = azurerm_resource_group.main.name
-  xml_content        = templatefile("${path.module}/policies/api-policy.xml", {
-    function_app_name = azurerm_linux_function_app.main.name
-  })
-  
-  depends_on = [
-    azurerm_api_management_api.mcp
-  ]
-}
-*/
 
 # API Operations
 resource "azurerm_api_management_api_operation" "stream" {

@@ -1,0 +1,5 @@
+{
+  "redirectUris": [
+    "http://localhost:5500"
+  ]
+}

@@ -1,0 +1,124 @@
+{
+  "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#applications/$entity",
+  "addIns": [],
+  "api": {
+    "acceptMappedClaims": null,
+    "knownClientApplications": [],
+    "oauth2PermissionScopes": [
+      {
+        "adminConsentDescription": "Allows the app to access MCP Server API on behalf of the signed-in user",
+        "adminConsentDisplayName": "Access MCP Server API",
+        "id": "7502850d-bc91-4ad0-a14a-9650df25e62b",
+        "isEnabled": true,
+        "type": "User",
+        "userConsentDescription": "Allows the app to access MCP Server API on your behalf",
+        "userConsentDisplayName": "Access MCP Server API",
+        "value": "access_as_user"
+      }
+    ],
+    "preAuthorizedApplications": [],
+    "requestedAccessTokenVersion": null
+  },
+  "appId": "c1de1621-a378-469d-8e17-b5c2d3b94bee",
+  "appRoles": [],
+  "applicationTemplateId": null,
+  "certification": null,
+  "createdDateTime": "2025-07-24T01:25:46Z",
+  "defaultRedirectUri": null,
+  "deletedDateTime": null,
+  "description": null,
+  "disabledByMicrosoftStatus": null,
+  "displayName": "MCP-Server-QuickStart",
+  "groupMembershipClaims": null,
+  "id": "e34393a1-7316-456d-8761-d1df29376b1e",
+  "identifierUris": [
+    "api://c1de1621-a378-469d-8e17-b5c2d3b94bee"
+  ],
+  "info": {
+    "logoUrl": null,
+    "marketingUrl": null,
+    "privacyStatementUrl": null,
+    "supportUrl": null,
+    "termsOfServiceUrl": null
+  },
+  "isDeviceOnlyAuthSupported": null,
+  "isFallbackPublicClient": true,
+  "keyCredentials": [],
+  "nativeAuthenticationApisEnabled": null,
+  "notes": null,
+  "optionalClaims": null,
+  "parentalControlSettings": {
+    "countriesBlockedForMinors": [],
+    "legalAgeGroupRule": "Allow"
+  },
+  "passwordCredentials": [
+    {
+      "customKeyIdentifier": null,
+      "displayName": null,
+      "endDateTime": "2026-07-24T01:26:14Z",
+      "hint": "Koq",
+      "keyId": "2156b600-218e-48b0-a7cb-b5d537e79617",
+      "secretText": null,
+      "startDateTime": "2025-07-24T01:26:14Z"
+    }
+  ],
+  "publicClient": {
+    "redirectUris": []
+  },
+  "publisherDomain": "antoniocunanangmail.onmicrosoft.com",
+  "requestSignatureVerification": null,
+  "requiredResourceAccess": [],
+  "samlMetadataUrl": null,
+  "serviceManagementReference": null,
+  "servicePrincipalLockConfiguration": null,
+  "signInAudience": "AzureADMyOrg",
+  "spa": {
+    "redirectUris": [
+      "http://localhost:5500",
+      "http://localhost:5500/test_client.html",
+      "http://127.0.0.1:5500/test_client.html",
+      "http://localhost:5500/tests/test_client.html",
+      "http://127.0.0.1:5500/tests/test_client.html"
+    ]
+  },
+  "tags": [],
+  "tokenEncryptionKeyId": null,
+  "uniqueName": null,
+  "verifiedPublisher": {
+    "addedDateTime": null,
+    "displayName": null,
+    "verifiedPublisherId": null
+  },
+  "web": {
+    "homePageUrl": null,
+    "implicitGrantSettings": {
+      "enableAccessTokenIssuance": true,
+      "enableIdTokenIssuance": true
+    },
+    "logoutUrl": null,
+    "redirectUriSettings": [
+      {
+        "index": null,
+        "uri": "http://127.0.0.1:5500/tests/test_client.html"
+      },
+      {
+        "index": null,
+        "uri": "http://localhost:5500/tests/test_client.html"
+      },
+      {
+        "index": null,
+        "uri": "http://127.0.0.1:5500/test_client.html"
+      },
+      {
+        "index": null,
+        "uri": "http://localhost:5500/test_client.html"
+      }
+    ],
+    "redirectUris": [
+      "http://127.0.0.1:5500/tests/test_client.html",
+      "http://localhost:5500/tests/test_client.html",
+      "http://127.0.0.1:5500/test_client.html",
+      "http://localhost:5500/test_client.html"
+    ]
+  }
+}

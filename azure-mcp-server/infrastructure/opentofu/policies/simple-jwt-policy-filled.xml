@@ -1,0 +1,50 @@
+<policies>
+    <inbound>
+        <!-- Validate JWT token with flexible audience -->
+        <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized">
+            <openid-config url="https://login.microsoftonline.com/c67773cd-1868-485d-bc21-f36acb61ce1a/v2.0/.well-known/openid-configuration" />
+            <audiences>
+                <!-- Accept both the client ID and api:// format -->
+                <audience>c1de1621-a378-469d-8e17-b5c2d3b94bee</audience>
+                <audience>api://c1de1621-a378-469d-8e17-b5c2d3b94bee</audience>
+            </audiences>
+            <issuers>
+                <issuer>https://sts.windows.net/c67773cd-1868-485d-bc21-f36acb61ce1a/</issuer>
+                <issuer>https://login.microsoftonline.com/c67773cd-1868-485d-bc21-f36acb61ce1a/v2.0</issuer>
+            </issuers>
+        </validate-jwt>
+        
+        <!-- Add Function key if configured -->
+        <set-header name="x-functions-key" exists-action="override">
+            <value>{{AzureFunctionKey}}</value>
+        </set-header>
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+        <!-- Add CORS headers -->
+        <cors allow-credentials="true">
+            <allowed-origins>
+                <origin>http://localhost:5500</origin>
+                <origin>http://127.0.0.1:5500</origin>
+                <origin>https://github.com</origin>
+                <origin>https://copilot.github.com</origin>
+            </allowed-origins>
+            <allowed-methods>
+                <method>GET</method>
+                <method>POST</method>
+                <method>OPTIONS</method>
+            </allowed-methods>
+            <allowed-headers>
+                <header>Authorization</header>
+                <header>Content-Type</header>
+                <header>X-Session-Id</header>
+            </allowed-headers>
+        </cors>
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

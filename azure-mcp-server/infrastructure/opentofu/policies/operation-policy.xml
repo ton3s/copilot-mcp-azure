@@ -1,0 +1,16 @@
+<policies>
+    <inbound>
+        <base />
+        <!-- Rewrite the backend URL to match function app routing -->
+        <rewrite-uri template="/mcp/command" copy-unmatched-params="true" />
+    </inbound>
+    <backend>
+        <base />
+    </backend>
+    <outbound>
+        <base />
+    </outbound>
+    <on-error>
+        <base />
+    </on-error>
+</policies>

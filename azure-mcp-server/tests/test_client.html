@@ -61,6 +61,10 @@
             background: #f8d7da;
             color: #721c24;
         }
+        .status.authenticating {
+            background: #cce5ff;
+            color: #004085;
+        }
         .output-section {
             margin-top: 20px;
         }
@@ -96,6 +100,22 @@
         .tool-item:hover {
             background: #e0e0e0;
         }
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border: 1px solid #f5c6cb;
+        }
+        .user-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border: 1px solid #bee5eb;
+        }
     </style>
 </head>
 <body>
@@ -105,18 +125,25 @@
         <div class="config-section">
             <h3>Configuration</h3>
             <input type="text" id="apiUrl" placeholder="API Base URL (e.g., https://your-apim.azure-api.net)" />
-            <input type="text" id="tenantId" placeholder="Azure AD Tenant ID" />
-            <input type="text" id="clientId" placeholder="Azure AD Client ID" />
-            <input type="password" id="clientSecret" placeholder="Client Secret (for testing only)" />
+            <input type="text" id="tenantId" placeholder="Azure AD Tenant ID" value="c67773cd-1868-485d-bc21-f36acb61ce1a" />
+            <input type="text" id="clientId" placeholder="Azure AD Client ID" value="c1de1621-a378-469d-8e17-b5c2d3b94bee" />
+            <input type="text" id="redirectUri" placeholder="Redirect URI (default: current page)" />
+            <small style="color: #666;">Note: The redirect URI must be registered in your Azure AD app registration</small>
         </div>
 
         <div class="status disconnected" id="connectionStatus">
-            Status: Disconnected
+            Status: Not authenticated
         </div>
 
+        <div id="userInfo" class="user-info" style="display: none;">
+            <strong>Logged in as:</strong> <span id="userName"></span>
+        </div>
+
+        <div id="errorMessage" class="error-message" style="display: none;"></div>
+
         <div class="button-group">
-            <button onclick="connect()">Connect</button>
-            <button onclick="disconnect()" disabled id="disconnectBtn">Disconnect</button>
+            <button onclick="login()" id="loginBtn">Login with Azure AD</button>
+            <button onclick="logout()" disabled id="logoutBtn">Logout</button>
             <button onclick="listTools()" disabled id="listToolsBtn">List Tools</button>
             <button onclick="listResources()" disabled id="listResourcesBtn">List Resources</button>
             <button onclick="testAnalyzeCode()" disabled id="analyzeBtn">Test Analyze Code</button>
@@ -139,71 +166,279 @@
         let accessToken = null;
         let sessionId = null;
         let eventSource = null;
+        let codeVerifier = null;
+        let codeChallenge = null;
 
-        async function getAccessToken() {
+        // PKCE Helper Functions
+        function generateRandomString(length) {
+            const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+            const array = new Uint8Array(length);
+            crypto.getRandomValues(array);
+            return Array.from(array, byte => charset[byte % charset.length]).join('');
+        }
+
+        async function generateCodeChallenge(verifier) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(verifier);
+            const digest = await crypto.subtle.digest('SHA-256', data);
+            return btoa(String.fromCharCode(...new Uint8Array(digest)))
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=/g, '');
+        }
+
+        // Get redirect URI
+        function getRedirectUri() {
+            const customUri = document.getElementById('redirectUri').value;
+            return customUri || window.location.origin + window.location.pathname;
+        }
+
+        // Parse hash fragment for tokens
+        function parseHashFragment() {
+            const hash = window.location.hash.substring(1);
+            const params = new URLSearchParams(hash);
+            
+            const accessToken = params.get('access_token');
+            const idToken = params.get('id_token');
+            const state = params.get('state');
+            const error = params.get('error');
+            const errorDescription = params.get('error_description');
+            
+            return { accessToken, idToken, state, error, errorDescription };
+        }
+
+        // Parse query params for authorization code
+        function parseQueryParams() {
+            const params = new URLSearchParams(window.location.search);
+            
+            const code = params.get('code');
+            const state = params.get('state');
+            const error = params.get('error');
+            const errorDescription = params.get('error_description');
+            
+            return { code, state, error, errorDescription };
+        }
+
+        // Login function using OAuth2 authorization code flow with PKCE
+        async function login() {
+            try {
+                updateStatus('Redirecting to Azure AD...', 'authenticating');
+                
+                const tenantId = document.getElementById('tenantId').value;
+                const clientId = document.getElementById('clientId').value;
+                const redirectUri = getRedirectUri();
+
+                // Generate PKCE values
+                codeVerifier = generateRandomString(128);
+                codeChallenge = await generateCodeChallenge(codeVerifier);
+                
+                // Store values in session storage
+                sessionStorage.setItem('pkce_code_verifier', codeVerifier);
+                sessionStorage.setItem('pkce_state', generateRandomString(32));
+                
+                // Build authorization URL
+                const authUrl = new URL(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize`);
+                authUrl.searchParams.append('client_id', clientId);
+                authUrl.searchParams.append('response_type', 'code');
+                authUrl.searchParams.append('redirect_uri', redirectUri);
+                // Use just the standard scopes for authentication
+                // The access token will still work with your API when properly configured
+                authUrl.searchParams.append('scope', 'openid profile email offline_access');
+                authUrl.searchParams.append('state', sessionStorage.getItem('pkce_state'));
+                authUrl.searchParams.append('code_challenge', codeChallenge);
+                authUrl.searchParams.append('code_challenge_method', 'S256');
+                authUrl.searchParams.append('prompt', 'select_account');
+
+                // Redirect to Azure AD
+                window.location.href = authUrl.toString();
+            } catch (error) {
+                console.error('Login error:', error);
+                showError('Failed to initiate login: ' + error.message);
+            }
+        }
+
+        // Exchange authorization code for tokens
+        async function exchangeCodeForTokens(code) {
             const tenantId = document.getElementById('tenantId').value;
             const clientId = document.getElementById('clientId').value;
-            const clientSecret = document.getElementById('clientSecret').value;
+            const redirectUri = getRedirectUri();
+            const verifier = sessionStorage.getItem('pkce_code_verifier');
 
             const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
             
             const params = new URLSearchParams({
                 client_id: clientId,
-                client_secret: clientSecret,
-                scope: `api://${clientId}/.default`,
-                grant_type: 'client_credentials'
+                grant_type: 'authorization_code',
+                code: code,
+                redirect_uri: redirectUri,
+                code_verifier: verifier,
+                scope: 'openid profile email offline_access'
             });
 
-            const response = await fetch(tokenUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                },
-                body: params
-            });
-
-            const data = await response.json();
-            return data.access_token;
-        }
-
-        async function connect() {
             try {
-                updateStatus('Authenticating...', false);
-                
-                // Get access token
-                accessToken = await getAccessToken();
-                
-                // Initialize MCP session
-                const initResponse = await sendCommand('initialize', {
-                    clientInfo: {
-                        name: 'Web Test Client',
-                        version: '1.0.0'
+                const response = await fetch(tokenUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded'
                     },
-                    capabilities: {
-                        tools: true,
-                        resources: true,
-                        prompts: true,
-                        sampling: true
-                    }
+                    body: params
                 });
 
-                logCommand('initialize', initResponse);
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error_description || errorData.error || 'Token exchange failed');
+                }
 
-                // Connect to SSE stream
-                connectSSE();
-
-                // Enable buttons
-                document.getElementById('disconnectBtn').disabled = false;
-                document.getElementById('listToolsBtn').disabled = false;
-                document.getElementById('listResourcesBtn').disabled = false;
-                document.getElementById('analyzeBtn').disabled = false;
-                document.getElementById('generateBtn').disabled = false;
-
-                updateStatus('Connected', true);
+                const data = await response.json();
+                return data;
             } catch (error) {
-                console.error('Connection error:', error);
-                updateStatus(`Error: ${error.message}`, false);
+                console.error('Token exchange error:', error);
+                throw error;
             }
+        }
+
+        // Handle authentication callback
+        async function handleAuthCallback() {
+            const queryParams = parseQueryParams();
+            
+            if (queryParams.error) {
+                showError(`Authentication failed: ${queryParams.errorDescription || queryParams.error}`);
+                return;
+            }
+
+            if (queryParams.code) {
+                const savedState = sessionStorage.getItem('pkce_state');
+                
+                if (queryParams.state !== savedState) {
+                    showError('Invalid state parameter. Possible CSRF attack.');
+                    return;
+                }
+
+                try {
+                    updateStatus('Exchanging code for tokens...', 'authenticating');
+                    
+                    const tokenData = await exchangeCodeForTokens(queryParams.code);
+                    
+                    accessToken = tokenData.access_token;
+                    sessionStorage.setItem('access_token', accessToken);
+                    
+                    if (tokenData.id_token) {
+                        const idTokenPayload = parseJwt(tokenData.id_token);
+                        sessionStorage.setItem('user_name', idTokenPayload.name || idTokenPayload.preferred_username || 'User');
+                    }
+                    
+                    // Clean up URL
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    
+                    // Clean up session storage
+                    sessionStorage.removeItem('pkce_code_verifier');
+                    sessionStorage.removeItem('pkce_state');
+                    
+                    onAuthenticationSuccess();
+                } catch (error) {
+                    showError('Failed to exchange code for tokens: ' + error.message);
+                }
+            }
+        }
+
+        // Parse JWT token
+        function parseJwt(token) {
+            try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                return JSON.parse(jsonPayload);
+            } catch (e) {
+                console.error('Failed to parse JWT:', e);
+                return {};
+            }
+        }
+
+        // On successful authentication
+        async function onAuthenticationSuccess() {
+            updateStatus('Authenticated', true);
+            
+            // Show user info
+            const userName = sessionStorage.getItem('user_name');
+            if (userName) {
+                document.getElementById('userName').textContent = userName;
+                document.getElementById('userInfo').style.display = 'block';
+            }
+            
+            // Enable/disable buttons
+            document.getElementById('loginBtn').disabled = true;
+            document.getElementById('logoutBtn').disabled = false;
+            document.getElementById('listToolsBtn').disabled = false;
+            document.getElementById('listResourcesBtn').disabled = false;
+            document.getElementById('analyzeBtn').disabled = false;
+            document.getElementById('generateBtn').disabled = false;
+            
+            // Initialize MCP session
+            try {
+                await initializeMCPSession();
+            } catch (error) {
+                console.error('Failed to initialize MCP session:', error);
+                showError('Failed to initialize MCP session: ' + error.message);
+            }
+        }
+
+        // Initialize MCP session
+        async function initializeMCPSession() {
+            const initResponse = await sendCommand('initialize', {
+                clientInfo: {
+                    name: 'Web Test Client',
+                    version: '1.0.0'
+                },
+                capabilities: {
+                    tools: true,
+                    resources: true,
+                    prompts: true,
+                    sampling: true
+                }
+            });
+
+            logCommand('initialize', initResponse);
+
+            // Connect to SSE stream
+            connectSSE();
+        }
+
+        // Logout function
+        function logout() {
+            const tenantId = document.getElementById('tenantId').value;
+            
+            // Clear tokens
+            accessToken = null;
+            sessionStorage.removeItem('access_token');
+            sessionStorage.removeItem('user_name');
+            
+            // Disconnect SSE
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            
+            // Reset UI
+            document.getElementById('userInfo').style.display = 'none';
+            document.getElementById('loginBtn').disabled = false;
+            document.getElementById('logoutBtn').disabled = true;
+            document.getElementById('listToolsBtn').disabled = true;
+            document.getElementById('listResourcesBtn').disabled = true;
+            document.getElementById('analyzeBtn').disabled = true;
+            document.getElementById('generateBtn').disabled = true;
+            
+            updateStatus('Not authenticated', false);
+            
+            // Clear outputs
+            document.getElementById('sseOutput').innerHTML = '';
+            document.getElementById('commandOutput').innerHTML = '';
+            document.getElementById('toolsOutput').innerHTML = '';
+            
+            // Optionally redirect to Azure AD logout
+            const logoutUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/logout`;
+            // window.location.href = logoutUrl;
         }
 
         function connectSSE() {
@@ -236,6 +471,12 @@
             eventSource.onerror = (error) => {
                 console.error('SSE error:', error);
                 logSSE('error', { error: 'Connection error' });
+                
+                // Close the connection after error to prevent retries
+                if (eventSource.readyState !== EventSource.CLOSED) {
+                    eventSource.close();
+                    logSSE('info', { message: 'SSE connection closed. Using request/response mode.' });
+                }
             };
         }
 
@@ -327,29 +568,33 @@ print(f"Fibonacci(10) = {result}")`;
             }
         }
 
-        function disconnect() {
-            if (eventSource) {
-                eventSource.close();
-                eventSource = null;
-            }
-
-            sessionId = null;
-            accessToken = null;
-
-            // Disable buttons
-            document.getElementById('disconnectBtn').disabled = true;
-            document.getElementById('listToolsBtn').disabled = true;
-            document.getElementById('listResourcesBtn').disabled = true;
-            document.getElementById('analyzeBtn').disabled = true;
-            document.getElementById('generateBtn').disabled = true;
-
-            updateStatus('Disconnected', false);
-        }
-
-        function updateStatus(message, connected) {
+        // Update status display
+        function updateStatus(message, status) {
             const statusEl = document.getElementById('connectionStatus');
             statusEl.textContent = `Status: ${message}`;
-            statusEl.className = `status ${connected ? 'connected' : 'disconnected'}`;
+            
+            let className = 'status';
+            if (status === true || status === 'connected') {
+                className += ' connected';
+            } else if (status === false || status === 'disconnected') {
+                className += ' disconnected';
+            } else if (status === 'authenticating') {
+                className += ' authenticating';
+            }
+            
+            statusEl.className = className;
+        }
+
+        // Show error message
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+            
+            // Hide after 10 seconds
+            setTimeout(() => {
+                errorEl.style.display = 'none';
+            }, 10000);
         }
 
         function logSSE(eventType, data) {
@@ -382,11 +627,23 @@ print(f"Fibonacci(10) = {result}")`;
             });
         }
 
-        // Load saved configuration
-        window.onload = function() {
+        // Load saved configuration and check for auth callback
+        window.onload = async function() {
+            // Load saved configuration
             document.getElementById('apiUrl').value = localStorage.getItem('apiUrl') || '';
-            document.getElementById('tenantId').value = localStorage.getItem('tenantId') || '';
-            document.getElementById('clientId').value = localStorage.getItem('clientId') || '';
+            document.getElementById('tenantId').value = localStorage.getItem('tenantId') || 'c67773cd-1868-485d-bc21-f36acb61ce1a';
+            document.getElementById('clientId').value = localStorage.getItem('clientId') || 'c1de1621-a378-469d-8e17-b5c2d3b94bee';
+            document.getElementById('redirectUri').value = localStorage.getItem('redirectUri') || '';
+            
+            // Check if we're returning from Azure AD authentication
+            await handleAuthCallback();
+            
+            // Check if we have a stored access token
+            const storedToken = sessionStorage.getItem('access_token');
+            if (storedToken) {
+                accessToken = storedToken;
+                onAuthenticationSuccess();
+            }
         };
 
         // Save configuration
@@ -398,6 +655,9 @@ print(f"Fibonacci(10) = {result}")`;
         });
         document.getElementById('clientId').addEventListener('change', (e) => {
             localStorage.setItem('clientId', e.target.value);
+        });
+        document.getElementById('redirectUri').addEventListener('change', (e) => {
+            localStorage.setItem('redirectUri', e.target.value);
         });
     </script>
 </body>
